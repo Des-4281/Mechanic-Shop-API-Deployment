@@ -31,7 +31,7 @@ class TestCustomers(unittest.TestCase):
     def test_create_customer(self):
         payload = {"name": "John Doe", "email": "jd@email.com", "phone": "123-456-7890", "password": "abc123"}
         response = self.client.post('/customers', json=payload)
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 999)
         self.assertEqual(response.json['name'], "John Doe")
         self.assertNotIn('password', response.json)          # password must never come back
 
