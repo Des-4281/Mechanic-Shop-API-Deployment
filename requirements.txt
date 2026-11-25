@@ -1,0 +1,10 @@
+Flask
+Flask-SQLAlchemy
+flask-marshmallow
+marshmallow-sqlalchemy
+Flask-Limiter
+Flask-Caching
+python-jose
+python-dotenv
+mysql-connector-python
+flask-swagger-ui

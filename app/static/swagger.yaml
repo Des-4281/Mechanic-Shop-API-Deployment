@@ -1,0 +1,1029 @@
+swagger: '2.0'
+info:
+  title: "Mechanic Shop API"
+  description: "API for managing customers, mechanics, service tickets, and inventory for a mechanic shop."
+  version: "1.0.0"
+host: "127.0.0.1:5000"
+schemes:
+  - "http"
+consumes:
+  - "application/json"
+produces:
+  - "application/json"
+
+securityDefinitions:
+  bearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+
+paths:
+  /customers:
+    post:
+      tags:
+        - Customers
+      summary: "Create a customer"
+      description: "Creates a new customer account. The email must be unique. The password is stored but never returned. Rate limited to 5 requests per minute."
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Information for the new customer"
+          required: true
+          schema:
+            $ref: "#/definitions/CreateCustomerPayload"
+      responses:
+        201:
+          description: "Customer created"
+          schema:
+            $ref: "#/definitions/CustomerResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Jane Doe"
+              email: "jane@gmail.com"
+              phone: "321-555-0000"
+        400:
+          description: "Missing or invalid fields, or the email is already in use"
+          examples:
+            application/json:
+              error: "Email already associated with an account."
+        429:
+          description: "Too many requests (limit is 5 per minute)"
+    put:
+      tags:
+        - Customers
+      summary: "Update the logged-in customer"
+      description: "Updates the customer who owns the token. The customer ID comes from the token, not the URL. Send all fields (name, email, phone, password)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Updated customer information"
+          required: true
+          schema:
+            $ref: "#/definitions/CreateCustomerPayload"
+      responses:
+        200:
+          description: "Customer updated"
+          schema:
+            $ref: "#/definitions/CustomerResponse"
+          examples:
+            application/json:
+              id: 2
+              name: "Jane Doe"
+              email: "jane@gmail.com"
+              phone: "111-555-1111"
+        400:
+          description: "Missing or invalid fields"
+          examples:
+            application/json:
+              email: ["Missing data for required field."]
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        404:
+          description: "Customer from the token no longer exists"
+          examples:
+            application/json:
+              error: "Customer not found."
+
+    delete:
+      tags:
+        - Customers
+      summary: "Delete the logged-in customer"
+      description: "Deletes the customer who owns the token, along with their service tickets."
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: "Customer deleted"
+          examples:
+            application/json:
+              message: "Customer id: 2, successfully deleted."
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        404:
+          description: "Customer from the token no longer exists"
+          examples:
+            application/json:
+              error: "Customer not found."
+    get:
+      tags:
+        - Customers
+      summary: "Get all customers"
+      description: "Returns all customers. Add page and per_page to get one page of results. Results are cached for 60 seconds."
+      parameters:
+        - in: "query"
+          name: "page"
+          type: "integer"
+          required: false
+          description: "Page number (use together with per_page)"
+        - in: "query"
+          name: "per_page"
+          type: "integer"
+          required: false
+          description: "Number of customers per page"
+      responses:
+        200:
+          description: "A list of customers"
+          schema:
+            $ref: "#/definitions/CustomersListResponse"
+          examples:
+            application/json:
+              - id: 1
+                name: "Jane Doe"
+                email: "jane@gmail.com"
+                phone: "321-555-0000"
+  
+  /customers/{customer_id}:
+    get:
+      tags:
+        - Customers
+      summary: "Get one customer"
+      description: "Returns a single customer by ID."
+      parameters:
+        - in: "path"
+          name: "customer_id"
+          type: "integer"
+          required: true
+          description: "ID of the customer"
+      responses:
+        200:
+          description: "The customer"
+          schema:
+            $ref: "#/definitions/CustomerResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Jane Doe"
+              email: "jane@gmail.com"
+              phone: "321-555-0000"
+        404:
+          description: "Customer not found"
+          examples:
+            application/json:
+              error: "Customer not found."
+  /customers/login:
+    post:
+      tags:
+        - Customers
+      summary: "Customer login"
+      description: "Logs in a customer with email and password and returns a token. Use the token in the Authorize button as: Bearer <token>. The token expires after 1 hour. Rate limited to 5 requests per minute."
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Login credentials"
+          required: true
+          schema:
+            $ref: "#/definitions/LoginPayload"
+      responses:
+        200:
+          description: "Login successful"
+          schema:
+            $ref: "#/definitions/LoginResponse"
+          examples:
+            application/json:
+              status: "success"
+              message: "Successfully logged in."
+              auth_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        400:
+          description: "Missing email or password"
+          examples:
+            application/json:
+              password: ["Missing data for required field."]
+        401:
+          description: "Wrong email or password"
+          examples:
+            application/json:
+              message: "Invalid email or password."
+        429:
+          description: "Too many requests (limit is 5 per minute)"
+
+  /customers/my-tickets:
+    get:
+      tags:
+        - Customers
+      summary: "Get the logged-in customer's service tickets"
+      description: "Returns all service tickets that belong to the customer who owns the token."
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: "The customer's service tickets (empty list if none)"
+          schema:
+            $ref: "#/definitions/ServiceTicketsListResponse"
+          examples:
+            application/json:
+              - id: 1
+                VIN: "1HGCM82633A004352"
+                service_date: "2026-10-14"
+                service_desc: "Oil change"
+                customer_id: 2
+                mechanics:
+                  - id: 1
+                    name: "Bob Smith"
+                    email: "bob@mechanicshop.com"
+                    phone: "321-555-0000"
+                    salary: 55000.0
+                part_links:
+                  - quantity: 2
+                    part:
+                      id: 1
+                      name: "Oil Filter"
+                      price: 12.99
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+  /mechanics:
+    post:
+      tags:
+        - Mechanics
+      summary: "Create a mechanic"
+      description: "Creates a new mechanic account. The email must be unique. The password is stored but never returned."
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Information for the new mechanic"
+          required: true
+          schema:
+            $ref: "#/definitions/CreateMechanicPayload"
+      responses:
+        201:
+          description: "Mechanic created"
+          schema:
+            $ref: "#/definitions/MechanicResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Bob Smith"
+              email: "bob@mechanicshop.com"
+              phone: "321-555-0000"
+              salary: 55000.0
+        400:
+          description: "Missing or invalid fields, or the email is already in use"
+          examples:
+            application/json:
+              error: "Email already associated with a mechanic."
+
+    get:
+      tags:
+        - Mechanics
+      summary: "Get all mechanics"
+      description: "Returns all mechanics. Results are cached for 60 seconds."
+      responses:
+        200:
+          description: "A list of mechanics"
+          schema:
+            $ref: "#/definitions/MechanicsListResponse"
+          examples:
+            application/json:
+              - id: 1
+                name: "Bob Smith"
+                email: "bob@mechanicshop.com"
+                phone: "321-555-0000"
+                salary: 55000.0
+    put:
+      tags:
+        - Mechanics
+      summary: "Update the logged-in mechanic"
+      description: "Updates the mechanic who owns the token. Requires a mechanic token. Send all fields."
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Updated mechanic information"
+          required: true
+          schema:
+            $ref: "#/definitions/CreateMechanicPayload"
+      responses:
+        200:
+          description: "Mechanic updated"
+          schema:
+            $ref: "#/definitions/MechanicResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Brendan Smith"
+              email: "bob@mechanicshop.com"
+              phone: "321-555-0000"
+              salary: 60000.0
+        400:
+          description: "Missing or invalid fields"
+          examples:
+            application/json:
+              email: ["Missing data for required field."]
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        403:
+          description: "Token is not a mechanic token"
+          examples:
+            application/json:
+              message: "Mechanics Only!"
+        404:
+          description: "Mechanic from the token no longer exists"
+          examples:
+            application/json:
+              error: "Mechanic not found."
+
+    delete:
+      tags:
+        - Mechanics
+      summary: "Delete the logged-in mechanic"
+      description: "Deletes the mechanic who owns the token. Requires a mechanic token."
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: "Mechanic deleted"
+          examples:
+            application/json:
+              message: "Mechanic id: 1, successfully deleted."
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        403:
+          description: "Token is not a mechanic token"
+          examples:
+            application/json:
+              message: "Mechanics Only!"
+        404:
+          description: "Mechanic from the token no longer exists"
+          examples:
+            application/json:
+              error: "Mechanic not found."
+
+  /mechanics/login:
+    post:
+      tags:
+        - Mechanics
+      summary: "Mechanic login"
+      description: "Logs in a mechanic and returns a mechanic token. Use it in the Authorize button as: Bearer <token>. Required for mechanic and inventory changes. Rate limited to 5 requests per minute."
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Login credentials"
+          required: true
+          schema:
+            $ref: "#/definitions/MechanicLoginPayload"
+      responses:
+        200:
+          description: "Login successful"
+          schema:
+            $ref: "#/definitions/LoginResponse"
+          examples:
+            application/json:
+              status: "success"
+              message: "Successfully logged in."
+              auth_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        400:
+          description: "Missing email or password"
+          examples:
+            application/json:
+              password: ["Missing data for required field."]
+        401:
+          description: "Wrong email or password"
+          examples:
+            application/json:
+              message: "Invalid email or password."
+        429:
+          description: "Too many requests (limit is 5 per minute)"
+
+  /mechanics/most-tickets:
+    get:
+      tags:
+        - Mechanics
+      summary: "Get mechanics ranked by number of tickets"
+      description: "Returns all mechanics sorted by how many service tickets they are assigned to, most first."
+      responses:
+        200:
+          description: "Mechanics sorted by ticket count"
+          schema:
+            $ref: "#/definitions/MechanicsListResponse"
+          examples:
+            application/json:
+              - id: 1
+                name: "Bob Smith"
+                email: "bob@mechanicshop.com"
+                phone: "321-555-0000"
+                salary: 55000.0
+
+  /inventory:
+    post:
+      tags:
+        - Inventory
+      summary: "Create a part"
+      description: "Adds a new part to the inventory. Requires a mechanic token."
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Information for the new part"
+          required: true
+          schema:
+            $ref: "#/definitions/InventoryPayload"
+      responses:
+        201:
+          description: "Part created"
+          schema:
+            $ref: "#/definitions/InventoryResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Oil Filter"
+              price: 12.99
+        400:
+          description: "Missing or invalid fields"
+          examples:
+            application/json:
+              price: ["Missing data for required field."]
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        403:
+          description: "Token is not a mechanic token"
+          examples:
+            application/json:
+              message: "Mechanics Only!"
+
+    get:
+      tags:
+        - Inventory
+      summary: "Get all parts"
+      description: "Returns every part in the inventory."
+      responses:
+        200:
+          description: "A list of parts"
+          schema:
+            $ref: "#/definitions/InventoryListResponse"
+          examples:
+            application/json:
+              - id: 1
+                name: "Oil Filter"
+                price: 12.99
+
+  /inventory/{inventory_id}:
+    get:
+      tags:
+        - Inventory
+      summary: "Get one part"
+      description: "Returns a single part by ID."
+      parameters:
+        - in: "path"
+          name: "inventory_id"
+          type: "integer"
+          required: true
+          description: "ID of the part"
+      responses:
+        200:
+          description: "The part"
+          schema:
+            $ref: "#/definitions/InventoryResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Oil Filter"
+              price: 12.99
+        404:
+          description: "Part not found"
+          examples:
+            application/json:
+              error: "Part not found"
+
+    put:
+      tags:
+        - Inventory
+      summary: "Update a part"
+      description: "Updates a part's name and price. Requires a mechanic token. Send all fields."
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: "path"
+          name: "inventory_id"
+          type: "integer"
+          required: true
+          description: "ID of the part to update"
+        - in: "body"
+          name: "body"
+          description: "Updated part information"
+          required: true
+          schema:
+            $ref: "#/definitions/InventoryPayload"
+      responses:
+        200:
+          description: "Part updated"
+          schema:
+            $ref: "#/definitions/InventoryResponse"
+          examples:
+            application/json:
+              id: 1
+              name: "Oil Filter"
+              price: 14.99
+        400:
+          description: "Missing or invalid fields"
+          examples:
+            application/json:
+              price: ["Not a valid number."]
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        403:
+          description: "Token is not a mechanic token"
+          examples:
+            application/json:
+              message: "Mechanics Only!"
+        404:
+          description: "Part not found"
+          examples:
+            application/json:
+              error: "Part not found"
+
+    delete:
+      tags:
+        - Inventory
+      summary: "Delete a part"
+      description: "Deletes a part from the inventory. Requires a mechanic token."
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: "path"
+          name: "inventory_id"
+          type: "integer"
+          required: true
+          description: "ID of the part to delete"
+      responses:
+        200:
+          description: "Part deleted"
+          examples:
+            application/json:
+              message: "Deleted - Part id: 1"
+        401:
+          description: "Token is missing, invalid, or expired"
+          examples:
+            application/json:
+              message: "Token is missing!"
+        403:
+          description: "Token is not a mechanic token"
+          examples:
+            application/json:
+              message: "Mechanics Only!"
+        404:
+          description: "Part not found"
+          examples:
+            application/json:
+              error: "Part not found"
+  /service-tickets:
+    post:
+      tags:
+        - Service Tickets
+      summary: "Create a service ticket"
+      description: "Creates a service ticket for an existing customer."
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Information for the new service ticket"
+          required: true
+          schema:
+            $ref: "#/definitions/CreateServiceTicketPayload"
+      responses:
+        201:
+          description: "Service ticket created"
+          schema:
+            $ref: "#/definitions/ServiceTicketResponse"
+          examples:
+            application/json:
+              id: 1
+              VIN: "1HGCM82633A004352"
+              service_date: "2026-10-14"
+              service_desc: "Oil change"
+              customer_id: 2
+              mechanics: []
+              part_links: []
+        400:
+          description: "Missing or invalid fields"
+          examples:
+            application/json:
+              VIN: ["Missing data for required field."]
+        404:
+          description: "Customer does not exist"
+          examples:
+            application/json:
+              error: "Customer not found."
+
+    get:
+      tags:
+        - Service Tickets
+      summary: "Get all service tickets"
+      description: "Returns every service ticket with its mechanics and parts."
+      responses:
+        200:
+          description: "A list of service tickets"
+          schema:
+            $ref: "#/definitions/ServiceTicketsListResponse"
+          examples:
+            application/json:
+              - id: 1
+                VIN: "1HGCM82633A004352"
+                service_date: "2026-10-14"
+                service_desc: "Oil change"
+                customer_id: 2
+                mechanics: []
+                part_links: []
+
+  /service-tickets/{ticket_id}/assign-mechanic/{mechanic_id}:
+    put:
+      tags:
+        - Service Tickets
+      summary: "Assign a mechanic to a ticket"
+      description: "Adds a mechanic to a service ticket."
+      parameters:
+        - in: "path"
+          name: "ticket_id"
+          type: "integer"
+          required: true
+          description: "ID of the service ticket"
+        - in: "path"
+          name: "mechanic_id"
+          type: "integer"
+          required: true
+          description: "ID of the mechanic to assign"
+      responses:
+        200:
+          description: "Mechanic assigned. Returns the updated ticket."
+          schema:
+            $ref: "#/definitions/ServiceTicketResponse"
+        400:
+          description: "Mechanic is already on this ticket"
+          examples:
+            application/json:
+              error: "Mechanic is already assigned to this ticket."
+        404:
+          description: "Ticket or mechanic not found"
+          examples:
+            application/json:
+              error: "Service ticket not found."
+
+  /service-tickets/{ticket_id}/remove-mechanic/{mechanic_id}:
+    put:
+      tags:
+        - Service Tickets
+      summary: "Remove a mechanic from a ticket"
+      description: "Removes a mechanic from a service ticket."
+      parameters:
+        - in: "path"
+          name: "ticket_id"
+          type: "integer"
+          required: true
+          description: "ID of the service ticket"
+        - in: "path"
+          name: "mechanic_id"
+          type: "integer"
+          required: true
+          description: "ID of the mechanic to remove"
+      responses:
+        200:
+          description: "Mechanic removed. Returns the updated ticket."
+          schema:
+            $ref: "#/definitions/ServiceTicketResponse"
+        400:
+          description: "Mechanic is not on this ticket"
+          examples:
+            application/json:
+              error: "Mechanic is not assigned to this ticket."
+        404:
+          description: "Ticket or mechanic not found"
+          examples:
+            application/json:
+              error: "Mechanic not found."
+
+  /service-tickets/{ticket_id}/edit:
+    put:
+      tags:
+        - Service Tickets
+      summary: "Add and remove mechanics in one request"
+      description: "Adds the mechanics in add_ids and removes the mechanics in remove_ids. IDs that don't exist, or are already in that state, are skipped."
+      parameters:
+        - in: "path"
+          name: "ticket_id"
+          type: "integer"
+          required: true
+          description: "ID of the service ticket"
+        - in: "body"
+          name: "body"
+          description: "Mechanic IDs to add and remove"
+          required: true
+          schema:
+            $ref: "#/definitions/EditTicketPayload"
+      responses:
+        200:
+          description: "Ticket updated. Returns the updated ticket."
+          schema:
+            $ref: "#/definitions/ServiceTicketResponse"
+        400:
+          description: "add_ids or remove_ids is missing"
+          examples:
+            application/json:
+              remove_ids: ["Missing data for required field."]
+        404:
+          description: "Ticket not found"
+          examples:
+            application/json:
+              error: "Service ticket not found."
+
+  /service-tickets/{ticket_id}/add-part/{inventory_id}:
+    put:
+      tags:
+        - Service Tickets
+      summary: "Add a part to a ticket"
+      description: "Adds a part from inventory to a service ticket. Quantity is optional and defaults to 1."
+      parameters:
+        - in: "path"
+          name: "ticket_id"
+          type: "integer"
+          required: true
+          description: "ID of the service ticket"
+        - in: "path"
+          name: "inventory_id"
+          type: "integer"
+          required: true
+          description: "ID of the part to add"
+        - in: "body"
+          name: "body"
+          description: "How many of this part (optional, defaults to 1)"
+          required: false
+          schema:
+            $ref: "#/definitions/AddPartPayload"
+      responses:
+        200:
+          description: "Part added. Returns the updated ticket."
+          schema:
+            $ref: "#/definitions/ServiceTicketResponse"
+          examples:
+            application/json:
+              id: 1
+              VIN: "1HGCM82633A004352"
+              service_date: "2026-10-14"
+              service_desc: "Oil change"
+              customer_id: 2
+              mechanics: []
+              part_links:
+                - quantity: 2
+                  part:
+                    id: 1
+                    name: "Oil Filter"
+                    price: 12.99
+        404:
+          description: "Ticket or part not found"
+          examples:
+            application/json:
+              error: "Inventory part not found."
+definitions:
+  CreateCustomerPayload:
+    type: "object"
+    properties:
+      name:
+        type: "string"
+      email:
+        type: "string"
+      phone:
+        type: "string"
+      password:
+        type: "string"
+    required:
+      - name
+      - email
+      - password
+      - phone
+    example:
+      name: "Jane Doe"
+      email: "jane@gmail.com"
+      phone: "321-555-0000"
+      password: "test123"
+
+  CustomerResponse:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+      name:
+        type: "string"
+      email:
+        type: "string"
+      phone:
+        type: "string"
+  CustomersListResponse:
+    type: "array"
+    items:
+      $ref: "#/definitions/CustomerResponse"
+
+  LoginPayload:
+    type: "object"
+    properties:
+      email:
+        type: "string"
+      password:
+        type: "string"
+    required:
+      - email
+      - password
+    example:
+      email: "jane@gmail.com"
+      password: "test123"
+
+  MechanicLoginPayload:
+    type: "object"
+    properties:
+      email:
+        type: "string"
+      password:
+        type: "string"
+    required:
+      - email
+      - password
+    example:
+      email: "bob@mechanicshop.com"
+      password: "mech123"
+
+  LoginResponse:
+    type: "object"
+    properties:
+      status:
+        type: "string"
+      message:
+        type: "string"
+      auth_token:
+        type: "string"
+
+  MechanicResponse:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+      name:
+        type: "string"
+      email:
+        type: "string"
+      phone:
+        type: "string"
+      salary:
+        type: "number"
+
+  InventoryResponse:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+      name:
+        type: "string"
+      price:
+        type: "number"
+
+  PartLinkResponse:
+    type: "object"
+    properties:
+      quantity:
+        type: "integer"
+      part:
+        $ref: "#/definitions/InventoryResponse"
+
+  ServiceTicketResponse:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+      VIN:
+        type: "string"
+      service_date:
+        type: "string"
+      service_desc:
+        type: "string"
+      customer_id:
+        type: "integer"
+      mechanics:
+        type: "array"
+        items:
+          $ref: "#/definitions/MechanicResponse"
+      part_links:
+        type: "array"
+        items:
+          $ref: "#/definitions/PartLinkResponse"
+
+  ServiceTicketsListResponse:
+    type: "array"
+    items:
+      $ref: "#/definitions/ServiceTicketResponse"
+
+  CreateMechanicPayload:
+    type: "object"
+    properties:
+      name:
+        type: "string"
+      email:
+        type: "string"
+      phone:
+        type: "string"
+      salary:
+        type: "number"
+      password:
+        type: "string"
+    required:
+      - name
+      - email
+      - password
+      - phone
+      - salary
+    example:
+      name: "Bob Smith"
+      email: "bob@mechanicshop.com"
+      phone: "321-555-0000"
+      salary: 55000.0
+      password: "mech123"
+
+  MechanicsListResponse:
+    type: "array"
+    items:
+      $ref: "#/definitions/MechanicResponse"
+
+  InventoryPayload:
+    type: "object"
+    properties:
+      name:
+        type: "string"
+      price:
+        type: "number"
+    required:
+      - name
+      - price
+    example:
+      name: "Oil Filter"
+      price: 12.99
+
+  InventoryListResponse:
+    type: "array"
+    items:
+      $ref: "#/definitions/InventoryResponse"
+  CreateServiceTicketPayload:
+    type: "object"
+    properties:
+      VIN:
+        type: "string"
+      service_date:
+        type: "string"
+      service_desc:
+        type: "string"
+      customer_id:
+        type: "integer"
+    required:
+      - VIN
+      - service_date
+      - service_desc
+      - customer_id
+    example:
+      VIN: "1HGCM82633A004352"
+      service_date: "2026-10-14"
+      service_desc: "Oil change"
+      customer_id: 2
+
+  EditTicketPayload:
+    type: "object"
+    properties:
+      add_ids:
+        type: "array"
+        items:
+          type: "integer"
+      remove_ids:
+        type: "array"
+        items:
+          type: "integer"
+    required:
+      - add_ids
+      - remove_ids
+    example:
+      add_ids: [2]
+      remove_ids: []
+
+  AddPartPayload:
+    type: "object"
+    properties:
+      quantity:
+        type: "integer"
+    example:
+      quantity: 2
