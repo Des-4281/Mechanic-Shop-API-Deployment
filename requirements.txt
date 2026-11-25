@@ -9,4 +9,4 @@ python-dotenv
 mysql-connector-python
 flask-swagger-ui
 gunicorn
-psycopg2-binary
+psycopg[binary]
