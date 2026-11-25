@@ -4,9 +4,14 @@ A REST API for a mechanic shop, built with Flask, SQLAlchemy, Marshmallow and My
 
 Every route is documented with **Swagger** (interactive docs at `/api/docs`) and covered by an automated **unittest** suite of 61 tests.
 
+**Live API:** https://mechanic-shop-api-deployment.onrender.com  
+**Live Swagger docs:** https://mechanic-shop-api-deployment.onrender.com/api/docs
+
+> Hosted on Render's free tier, so the first request after a quiet period can take up to a minute while the server wakes up.
+
 ## Tech Stack
 
-- Python 3.9
+- Python 3.12
 - Flask 3.1
 - Flask-SQLAlchemy 3.1 / SQLAlchemy 2.0
 - Flask-Marshmallow / marshmallow-sqlalchemy
@@ -15,13 +20,17 @@ Every route is documented with **Swagger** (interactive docs at `/api/docs`) and
 - python-jose (JSON Web Tokens)
 - flask-swagger-ui (interactive API docs)
 - unittest (Python's built-in test framework)
-- MySQL (via `mysql-connector-python`)
+- MySQL (via `mysql-connector-python`) for local development
+- PostgreSQL (via `psycopg`) in production
+- gunicorn (production web server)
+- Render (hosting) and GitHub Actions (CI/CD)
 
 ## Project Structure
 
 ```
 Mechanic Shop API/
-├── app.py                      # Entry point: creates the app, creates tables, runs the server
+├── flask_app.py                # Entry point for gunicorn: creates the app (ProductionConfig) and the tables
+├── .github/workflows/main.yaml # CI/CD pipeline: build → test → deploy
 ├── config.py                   # DevelopmentConfig, TestingConfig, ProductionConfig
 ├── requirements.txt            # Python packages the app needs
 ├── app/
@@ -71,7 +80,7 @@ Mechanic Shop API/
 
 5. **Run the app**
    ```bash
-   python app.py
+   flask --app flask_app run
    ```
    The server starts at `http://127.0.0.1:5000`, and the tables are created automatically on first run.
 
@@ -79,7 +88,9 @@ Mechanic Shop API/
 
 ## API Documentation (Swagger)
 
-With the server running, open **http://127.0.0.1:5000/api/docs**.
+Open the live docs at **https://mechanic-shop-api-deployment.onrender.com/api/docs**, or locally at **http://127.0.0.1:5000/api/docs** with the server running.
+
+The spec's `host` is set to the Render URL, so **Try it out** sends requests to the live API (and its Postgres database), even from the local page.
 
 The page is generated from `app/static/swagger.yaml` and documents all 24 routes in four sections: Customers, Mechanics, Inventory and Service Tickets. For each route it shows:
 
@@ -110,6 +121,18 @@ Besides the success cases, the tests cover the ways each route should fail:
 - no token or an invalid token → **401**
 - a customer token on a mechanics-only route → **403**
 - an ID that doesn't exist → **404**
+
+## Deployment and CI/CD
+
+The API runs on **Render** with a **PostgreSQL** database, served by **gunicorn** (`gunicorn flask_app:app`) using `ProductionConfig`. The database URL and secret key are environment variables on Render, not stored in the code, and `db.create_all()` in `flask_app.py` creates the tables on startup.
+
+Every push to `main` runs the GitHub Actions pipeline in `.github/workflows/main.yaml`:
+
+1. **build**: installs the packages from `requirements.txt` on a fresh machine (Python 3.12)
+2. **test**: runs all 61 unit tests (`needs: build`)
+3. **deploy**: tells Render to deploy the new version (`needs: test`)
+
+Because deploy needs test, **a failing test stops the release**: the live API only updates when every test passes. Render's own auto-deploy is turned off, so this pipeline is the only way to deploy. The Render API key and service ID are stored as GitHub Actions secrets (`RENDER_API_KEY`, `RENDER_SERVICE_ID`).
 
 ## Data Model
 
@@ -145,7 +168,7 @@ Protected routes read the user's ID from the token, so they have no ID in the UR
 
 ## API Endpoints
 
-Base URL: `http://127.0.0.1:5000`
+Base URL: `https://mechanic-shop-api-deployment.onrender.com` (live) or `http://127.0.0.1:5000` (local)
 
 ### Customers
 
@@ -279,7 +302,7 @@ The requests use ID `1` and create their own accounts, so reset to an **empty** 
 DROP DATABASE mechanic_shop_db;
 CREATE DATABASE mechanic_shop_db;
 ```
-Then restart `python app.py` to recreate the tables.
+Then restart `flask --app flask_app run` to recreate the tables.
 
 ## License 
 MIT
